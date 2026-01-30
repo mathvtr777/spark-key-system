@@ -1,5 +1,9 @@
 // Vercel Serverless Function - Delete Key
-const { kv } = require('@vercel/kv');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,15 +27,17 @@ module.exports = async (req, res) => {
             return res.status(403).json({ error: 'Senha admin incorreta' });
         }
 
-        // Delete key data
-        await kv.del(`key:${key}`);
+        const { error } = await supabase
+            .from('keys')
+            .delete()
+            .eq('key', key);
 
-        // Remove from list
-        await kv.lrem('all_keys', 0, key);
+        if (error) {
+            return res.status(500).json({ error: 'Erro ao deletar key' });
+        }
 
         return res.status(200).json({ success: true, message: 'Key deletada' });
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: 'Erro interno - Verifique se Vercel KV está configurado' });
+        return res.status(500).json({ error: 'Erro interno' });
     }
 };

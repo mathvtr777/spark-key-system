@@ -1,5 +1,9 @@
 // Vercel Serverless Function - Create Key
-const { kv } = require('@vercel/kv');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Use Service Role for admin writes
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,29 +32,31 @@ module.exports = async (req, res) => {
         const key = `SPK-${part()}-${part()}-${part()}`;
 
         // Calculate expiry
-        const expiry = Date.now() + (duration * 24 * 60 * 60 * 1000);
+        const expiry = new Date(Date.now() + (duration * 24 * 60 * 60 * 1000));
 
-        const keyData = {
-            expiry: expiry,
-            plan: plan || 'Standard',
-            created: Date.now(),
-            duration: duration
-        };
+        // Save to Supabase
+        const { error } = await supabase
+            .from('keys')
+            .insert({
+                key: key,
+                plan: plan || 'Standard',
+                expiry: expiry.toISOString(),
+                duration: duration,
+                created_at: new Date().toISOString()
+            });
 
-        // Save to Vercel KV
-        // Store individual key
-        await kv.set(`key:${key}`, keyData);
-
-        // Add to list of all keys
-        await kv.lpush('all_keys', key);
+        if (error) {
+            console.error('Supabase Error:', error);
+            return res.status(500).json({ error: 'Erro ao salvar no banco' });
+        }
 
         return res.status(200).json({
             success: true,
             key: key,
-            expiry: new Date(expiry).toISOString()
+            expiry: expiry.toISOString()
         });
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ error: 'Erro interno - Verifique se Vercel KV está configurado' });
+        return res.status(500).json({ error: 'Erro interno' });
     }
 };

@@ -1,5 +1,9 @@
 // Vercel Serverless Function - List Keys
-const { kv } = require('@vercel/kv');
+const { createClient } = require('@supabase/supabase-js');
+
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -23,32 +27,33 @@ module.exports = async (req, res) => {
             return res.status(403).json({ error: 'Senha admin incorreta' });
         }
 
-        // Get all key IDs
-        const keyIds = await kv.lrange('all_keys', 0, -1);
-        const now = Date.now();
-        const keys = [];
+        const { data: keysData, error } = await supabase
+            .from('keys')
+            .select('*')
+            .order('expiry', { ascending: false });
 
-        // Fetch details for each key
-        for (const key of keyIds) {
-            const data = await kv.get(`key:${key}`);
-            if (data) {
-                keys.push({
-                    key: key,
-                    plan: data.plan,
-                    created: data.created,
-                    expiry: data.expiry,
-                    duration: data.duration,
-                    expired: data.expiry < now,
-                    daysLeft: Math.ceil((data.expiry - now) / (1000 * 60 * 60 * 24))
-                });
-            } else {
-                // Key id exists in list but not data? Consider deleted or clean up
-            }
+        if (error) {
+            console.error(error);
+            return res.status(500).json({ error: 'Erro ao buscar keys' });
         }
+
+        const now = Date.now();
+        const keys = keysData.map(data => {
+            const expiry = new Date(data.expiry).getTime();
+            return {
+                key: data.key,
+                plan: data.plan,
+                created: data.created_at,
+                expiry: expiry,
+                duration: data.duration,
+                expired: expiry < now,
+                daysLeft: Math.ceil((expiry - now) / (1000 * 60 * 60 * 24))
+            };
+        });
 
         return res.status(200).json({ keys });
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ error: 'Erro interno - Verifique se Vercel KV está configurado' });
+        return res.status(500).json({ error: 'Erro interno' });
     }
 };

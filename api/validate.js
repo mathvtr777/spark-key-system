@@ -1,5 +1,10 @@
 // Vercel Serverless Function - Validate Key
-const { kv } = require('@vercel/kv');
+const { createClient } = require('@supabase/supabase-js');
+
+// Initialize Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 module.exports = async (req, res) => {
     // CORS headers
@@ -26,10 +31,14 @@ module.exports = async (req, res) => {
             });
         }
 
-        // Get key from Vercel KV
-        const keyData = await kv.get(`key:${key}`);
+        // Get key from Supabase
+        const { data: keyData, error } = await supabase
+            .from('keys')
+            .select('*')
+            .eq('key', key)
+            .single();
 
-        if (!keyData) {
+        if (error || !keyData) {
             return res.status(401).json({
                 valid: false,
                 message: 'Chave inválida ou não encontrada'
@@ -38,7 +47,9 @@ module.exports = async (req, res) => {
 
         // Check expiration
         const now = Date.now();
-        if (keyData.expiry < now) {
+        const expiry = new Date(keyData.expiry).getTime();
+
+        if (expiry < now) {
             return res.status(401).json({
                 valid: false,
                 message: 'Chave expirada'
@@ -46,20 +57,20 @@ module.exports = async (req, res) => {
         }
 
         // Calculate days left
-        const daysLeft = Math.ceil((keyData.expiry - now) / (1000 * 60 * 60 * 24));
+        const daysLeft = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
 
         return res.status(200).json({
             valid: true,
             status: 'active',
             plan: keyData.plan || 'Standard',
             credits: 999999999,
-            expiry: new Date(keyData.expiry).toISOString(),
-            expires_at: new Date(keyData.expiry).toISOString(),
+            expiry: new Date(expiry).toISOString(),
+            expires_at: new Date(expiry).toISOString(),
             daysLeft: daysLeft,
             message: `Key válida por mais ${daysLeft} dias`
         });
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ error: 'Erro interno - Verifique se Vercel KV está configurado' });
+        return res.status(500).json({ error: 'Erro interno' });
     }
 };
