@@ -7,11 +7,16 @@
     "start": "node index.js",
     "dev": "node index.js"
   },
-  "keywords": ["spark", "key", "validation"],
+  "keywords": [
+    "spark",
+    "key",
+    "validation"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "@vercel/kv": "^1.0.1"
   }
 }

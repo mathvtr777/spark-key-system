@@ -1,21 +1,5 @@
 // Vercel Serverless Function - Validate Key
-const fs = require('fs');
-const path = require('path');
-
-// Use /tmp for temporary storage (Vercel limitation)
-const DB_FILE = path.join('/tmp', 'keys.json');
-
-function initDB() {
-    if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ keys: {} }, null, 2));
-    }
-}
-
-function readDB() {
-    initDB();
-    const data = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(data);
-}
+const { kv } = require('@vercel/kv');
 
 module.exports = async (req, res) => {
     // CORS headers
@@ -42,8 +26,8 @@ module.exports = async (req, res) => {
             });
         }
 
-        const db = readDB();
-        const keyData = db.keys[key];
+        // Get key from Vercel KV
+        const keyData = await kv.get(`key:${key}`);
 
         if (!keyData) {
             return res.status(401).json({
@@ -75,6 +59,7 @@ module.exports = async (req, res) => {
             message: `Key válida por mais ${daysLeft} dias`
         });
     } catch (error) {
-        return res.status(500).json({ error: 'Internal server error' });
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno - Verifique se Vercel KV está configurado' });
     }
 };

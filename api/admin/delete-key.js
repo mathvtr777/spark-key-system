@@ -1,24 +1,5 @@
 // Vercel Serverless Function - Delete Key
-const fs = require('fs');
-const path = require('path');
-
-const DB_FILE = path.join('/tmp', 'keys.json');
-
-function initDB() {
-    if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ keys: {} }, null, 2));
-    }
-}
-
-function readDB() {
-    initDB();
-    const data = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(data);
-}
-
-function writeDB(data) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-}
+const { kv } = require('@vercel/kv');
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -42,17 +23,15 @@ module.exports = async (req, res) => {
             return res.status(403).json({ error: 'Senha admin incorreta' });
         }
 
-        const db = readDB();
+        // Delete key data
+        await kv.del(`key:${key}`);
 
-        if (!db.keys[key]) {
-            return res.status(404).json({ error: 'Key não encontrada' });
-        }
-
-        delete db.keys[key];
-        writeDB(db);
+        // Remove from list
+        await kv.lrem('all_keys', 0, key);
 
         return res.status(200).json({ success: true, message: 'Key deletada' });
     } catch (error) {
-        return res.status(500).json({ error: 'Internal server error' });
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno - Verifique se Vercel KV está configurado' });
     }
 };

@@ -1,24 +1,5 @@
 // Vercel Serverless Function - Create Key
-const fs = require('fs');
-const path = require('path');
-
-const DB_FILE = path.join('/tmp', 'keys.json');
-
-function initDB() {
-    if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify({ keys: {} }, null, 2));
-    }
-}
-
-function readDB() {
-    initDB();
-    const data = fs.readFileSync(DB_FILE, 'utf8');
-    return JSON.parse(data);
-}
-
-function writeDB(data) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-}
+const { kv } = require('@vercel/kv');
 
 module.exports = async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -49,15 +30,19 @@ module.exports = async (req, res) => {
         // Calculate expiry
         const expiry = Date.now() + (duration * 24 * 60 * 60 * 1000);
 
-        // Save to database
-        const db = readDB();
-        db.keys[key] = {
+        const keyData = {
             expiry: expiry,
             plan: plan || 'Standard',
             created: Date.now(),
             duration: duration
         };
-        writeDB(db);
+
+        // Save to Vercel KV
+        // Store individual key
+        await kv.set(`key:${key}`, keyData);
+
+        // Add to list of all keys
+        await kv.lpush('all_keys', key);
 
         return res.status(200).json({
             success: true,
@@ -65,6 +50,7 @@ module.exports = async (req, res) => {
             expiry: new Date(expiry).toISOString()
         });
     } catch (error) {
-        return res.status(500).json({ error: 'Internal server error' });
+        console.error(error);
+        return res.status(500).json({ error: 'Erro interno - Verifique se Vercel KV está configurado' });
     }
 };
